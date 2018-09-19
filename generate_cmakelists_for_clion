@@ -80,7 +80,8 @@ find . -type f | cut -c 3- | grep "$pattern" | sed -n 's/^/        /p' | sed '$s
 echo "" >> $filename
 
 # getting the names of the directories of these source files
-find . -type f | cut -c 3- | grep "$pattern" | xargs dirname | sort | uniq | sed -n 's/^/include_directories\(/p' | sed -n 's/$/\)/p' >> $filename
+#find . -type f | cut -c 3- | grep "$pattern" | xargs dirname | sort | uniq | sed -n 's/^/include_directories\(/p' | sed -n 's/$/\)/p' >> $filename
+find . -type f | cut -c 3- | grep "$pattern" | sed 's/\(.*\)\/\(.*\)/\1/g' | sort | uniq | sed -n 's/^/include_directories\(/p' | sed -n 's/$/\)/p' >> $filename
 echo "" >> $filename
 
 # writing the add_executable command
