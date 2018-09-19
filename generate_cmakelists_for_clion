@@ -1,0 +1,95 @@
+#!/bin/csh
+
+# This script generate CMakeLists.txt file for a C++ makefile project.
+# This will enable indexing and IntelliSense in CLion for editing the source code.
+# This is not intended for building the project using CLion.
+
+main:
+# setting some variables
+set force = false
+set project = `pwd | xargs basename`
+set cmake_version = 3.8
+set cpp_standard = 11
+set filename = "CMakeLists.txt"
+set source_files = ("h" "hh" "hpp" "hxx" "c" "cc" "cpp" "cxx" "i" "ii")
+
+# running some checks on the argument list
+foreach option ($argv)
+	# checking if there is a help option specified
+	if ("$option" == "-h" || "$option" == "--help") then
+		goto print_help
+	# checking if force flag is set or not
+	else if ("$option" == "-f" || "$option" == "--force") then
+		set force = true
+	else
+		# checking for project name
+		set flag = `echo $option | sed -n 's/--\?project=\(.*\)/true/p'`
+		if ("$flag" == "true") then
+			# project name has been set
+			# get the project name
+			set project = `echo $option | sed -n 's/--\?project=//p'`
+			if ("$project" == "") then
+				echo "Please specify a project name."
+				exit
+			endif
+		endif
+	endif
+end
+
+# checking if file exists or not
+if (-f $filename) then
+	if ($force == "true") then
+		# do not prompt user, and continue as if 'y' was entered from the user
+		rm -rf $filename
+	else
+		# prompt the user asking what to do
+		set choice = "anything"
+		while (!($choice == y || $choice == Y || $choice == n || $choice == N))
+			echo -n "File $filename already exists. Overwrite (y/n)? : "
+			set choice = $<
+			if ($choice == y || $choice == Y) then
+				# delete the file
+				rm -rf $filename
+				# and continue normally
+			else if ($choice == n || $choice == N) then
+				# exit the program
+				echo "The program will now exit"
+				exit
+			else
+				echo "Invalid option. Please try again."
+			endif
+		end
+	endif
+endif
+
+# start writing into the file
+touch $filename
+echo "cmake_minimum_required(VERSION $cmake_version)" >> $filename
+echo "project($project)" >> $filename
+echo "" >> $filename
+echo "set(CMAKE_CXX_STANDARD $cpp_standard)" >> $filename
+echo "" >> $filename
+echo "set(SOURCE_FILES" >> $filename
+
+# setting pattern for selecting the source files
+set pattern = `echo $source_files | sed 's/ /\\\|/g'`
+set pattern = \\.\\\($pattern\\\)$
+
+# finding all source files and writing it into the file
+find . -type f | cut -c 3- | grep "$pattern" | sed -n 's/^/        /p' | sed '$s/$/\)/p' | sed '$d' >> $filename
+echo "" >> $filename
+
+# getting the names of the directories of these source files
+find . -type f | cut -c 3- | grep "$pattern" | xargs dirname | sort | uniq | sed -n 's/^/include_directories\(/p' | sed -n 's/$/\)/p' >> $filename
+echo "" >> $filename
+
+# writing the add_executable command
+echo "add_executable($project "\$"{SOURCE_FILES})" >> $filename
+
+# Show a success message
+echo "$filename file has been created successfully."
+exit	# end main
+
+print_help:
+echo "Print help message here."
+exit	# end print_help
