@@ -8,6 +8,7 @@ main:
 # setting some variables
 set force = false
 set project = `pwd | xargs basename`
+set base_name = ""
 set cmake_version = 3.8
 set cpp_standard = 11
 set filename = "CMakeLists.txt"
@@ -32,6 +33,21 @@ foreach option ($argv)
 				echo "Please specify a project name."
 				exit
 			endif
+		endif
+		
+		# checking for base_name
+		set flag = `echo $option | sed -n 's/--\?base-name=\(.*\)/true/p'`
+		if ("$flag" == "true") then
+			# base-name has been set
+			# get the base-name
+			set base_name = `echo $option | sed -n 's/--\?base-name=//p'`
+			if ("$base_name" == "") then
+				echo "Please specify a base-name."
+				exit
+			endif
+			
+			# removing the last '/' if any
+			set base_name = `echo $base_name | sed 's/\/\+$//g'`
 		endif
 	endif
 end
@@ -75,13 +91,41 @@ echo "set(SOURCE_FILES" >> $filename
 set pattern = `echo $source_files | sed 's/ /\\\|/g'`
 set pattern = \\.\\\($pattern\\\)$
 
+echo "Getting source files..."
+
 # finding all source files and writing it into the file
 find . -type f | cut -c 3- | grep "$pattern" | sed -n 's/^/        /p' | sed '$s/$/\)/p' | sed '$d' >> $filename
 echo "" >> $filename
 
 # getting the names of the directories of these source files
 #find . -type f | cut -c 3- | grep "$pattern" | xargs dirname | sort | uniq | sed -n 's/^/include_directories\(/p' | sed -n 's/$/\)/p' >> $filename
-find . -type f | cut -c 3- | grep "$pattern" | sed 's/\(.*\)\/\(.*\)/\1/g' | sort | uniq | sed -n 's/^/include_directories\(/p' | sed -n 's/$/\)/p' >> $filename
+#find . -type f | cut -c 3- | grep "$pattern" | sed 's/\(.*\)\/\(.*\)/\1/g' | sort | uniq | sed -n 's/^/include_directories\(/p' | sed -n 's/$/\)/p' >> $filename
+
+echo "Getting include directories..."
+
+# finding all makefiles and then reading each of those files to get the include directories
+set a = ""
+foreach f (`find . | cut -c 3- | grep -i ^$base_name | grep -i makefile$`)
+	set temp = `cat $f | sed -n '/^ *INCLUDES/,/[^\\]$/p' | sed -n '/^ *INCLUDES/,/^$/p' | sed -e '/^$/d' -e 's/#.*//g' | sed -e '1s/^ *INCLUDES *= *//g' -e 's/^[[:blank:]]*//g' -e 's/[[:blank:]]*\\$//g' | tr '\n' ' ' | tr ' ' '\n'`
+	set a = "$a $temp"
+	set a = `echo $a | tr ' ' '\n' | sort | uniq`
+end
+
+# removing '/', '\', '+', '-', '=' and blank lines
+set a = `echo $a | tr ' ' '\n' | sed 's/\/$//g' | sed 's/^\///g' | sed -e '/^[=+-]/d' -e '/^\\/d' | sed '/^[\b\r]*$/d' | sort | uniq`
+
+echo "Resolving include directories..."
+
+foreach i ($a)
+	# resolving the directory name
+	set d_name = `readlink -f $base_name/$i`
+	if (-d $d_name) then
+		# Directory exists.
+		# include this directory
+		echo "include_directories($base_name/$i)" >> $filename
+	endif
+end
+
 echo "" >> $filename
 
 # writing the add_executable command
